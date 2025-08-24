@@ -1,0 +1,269 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Universal Media Downloader</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="description" content="Paste any media link (YouTube, Instagram, TikTok, X/Twitter, Pinterest, Snapchat, Spotify, Threads, Facebook) and auto-detect platform to fetch downloadable links via multimedia.tiiny.io" />
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <div class="min-h-screen">
+    <!-- Header -->
+    <header class="sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white/90 border-b">
+      <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+        <h1 class="text-xl font-bold">Universal Media Downloader</h1>
+        <a href="#help" class="text-sm text-blue-600 hover:underline">How it works</a>
+      </div>
+    </header><!-- Main -->
+<main class="max-w-4xl mx-auto px-4 py-8">
+  <div class="bg-white rounded-2xl shadow p-5 md:p-6">
+    <label for="url" class="block text-sm font-medium mb-2">Paste link</label>
+    <div class="flex gap-2">
+      <input id="url" type="url" placeholder="e.g. https://www.instagram.com/reel/xyz... or https://youtu.be/..." class="flex-1 px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      <button id="downloadBtn" class="px-4 py-3 rounded-xl bg-blue-600 text-white font-semibold disabled:opacity-50">Fetch</button>
+    </div>
+    <div id="platformBadge" class="mt-3 text-sm"></div>
+    <p id="hint" class="mt-2 text-xs text-gray-500">Auto-detects platform on paste/typing. Hit Enter or click Fetch.</p>
+  </div>
+
+  <div id="status" class="mt-6"></div>
+
+  <!-- Results -->
+  <section id="results" class="mt-6 space-y-4"></section>
+
+  <!-- Raw JSON -->
+  <details class="mt-6 bg-white rounded-2xl shadow p-5" id="rawJsonWrap">
+    <summary class="cursor-pointer select-none font-semibold">Raw response JSON</summary>
+    <pre id="rawJson" class="mt-3 text-xs overflow-auto"></pre>
+  </details>
+
+  <!-- Help -->
+  <section id="help" class="mt-12 text-sm text-gray-700">
+    <h2 class="text-lg font-semibold mb-2">Supported platforms (auto-detected)</h2>
+    <ul class="list-disc ml-5 grid md:grid-cols-2 gap-y-1">
+      <li>Instagram Reels → <code>?reel={link}</code></li>
+      <li>Instagram Posts → <code>?igpost={link}</code></li>
+      <li>TikTok → <code>?tiktok={link}</code></li>
+      <li>Snapchat → <code>?snap={link}</code></li>
+      <li>Spotify → <code>?spotify={link}</code></li>
+      <li>Threads → <code>?thread={link}</code></li>
+      <li>YouTube → <code>?yt={link}</code></li>
+      <li>Pinterest → <code>?pint={link}</code></li>
+      <li>Twitter/X → <code>?x={link}</code></li>
+      <li>Facebook → <code>?fb={link}</code></li>
+    </ul>
+    <p class="mt-3 text-xs text-gray-500">This client calls the public endpoint at <code>https://multimedia.tiiny.io</code>. Availability or rate limits may vary.</p>
+  </section>
+</main>
+
+  </div>  <script>
+    // --- Platform patterns & labels ---
+    const PLATFORM_PATTERNS = {
+      reel: /(?:instagram\.com|instagr\.am)\/reel\//i,
+      igpost: /(?:instagram\.com|instagr\.am)\/p\//i,
+      tiktok: /tiktok\.com\//i,
+      snap: /snapchat\.com/i,
+      spotify: /spotify\.com\//i,
+      thread: /threads\.net\//i,
+      yt: /(youtube\.com\/|youtu\.be\//i),
+      pint: /pinterest\.(?:com|in)\//i,
+      x: /(?:twitter\.com|x\.com)\//i,
+      fb: /facebook\.com\//i,
+    };
+
+    const PLATFORM_DESC = {
+      reel: 'Instagram Reel',
+      igpost: 'Instagram Post',
+      tiktok: 'TikTok',
+      snap: 'Snapchat',
+      spotify: 'Spotify',
+      thread: 'Threads',
+      yt: 'YouTube',
+      pint: 'Pinterest',
+      x: 'Twitter/X',
+      fb: 'Facebook',
+    };
+
+    function detectPlatform(url) {
+      for (const [key, pattern] of Object.entries(PLATFORM_PATTERNS)) {
+        if (pattern.test(url)) return key;
+      }
+      return null;
+    }
+
+    // --- DOM helpers ---
+    const el = (tag, className, html) => {
+      const n = document.createElement(tag);
+      if (className) n.className = className;
+      if (html !== undefined) n.innerHTML = html;
+      return n;
+    };
+
+    function setStatus(type, msg) {
+      const wrap = document.getElementById('status');
+      if (!msg) { wrap.innerHTML = ''; return; }
+      const color = type === 'error' ? 'bg-red-50 text-red-800 border-red-200' : type === 'info' ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200';
+      wrap.innerHTML = `<div class="border ${color} rounded-xl px-4 py-3 text-sm">${msg}</div>`;
+    }
+
+    function showPlatformBadge(platform) {
+      const badge = document.getElementById('platformBadge');
+      if (!platform) {
+        badge.innerHTML = '<span class="inline-flex items-center gap-2 text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-xl">Platform not detected</span>';
+        return;
+      }
+      const label = PLATFORM_DESC[platform] || platform;
+      badge.innerHTML = `<span class="inline-flex items-center gap-2 text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-xl">Detected: <strong>${label}</strong> <code class="text-xs">?${platform}=</code></span>`;
+    }
+
+    // --- Media extraction ---
+    const MEDIA_EXT = {
+      video: /(\.mp4|\.webm|\.m3u8)(\?|#|$)/i,
+      audio: /(\.mp3|\.m4a|\.aac|\.ogg|\.wav)(\?|#|$)/i,
+      image: /(\.jpg|\.jpeg|\.png|\.gif|\.webp)(\?|#|$)/i,
+    };
+
+    function extractLinks(obj) {
+      const out = new Set();
+      const stack = [obj];
+      while (stack.length) {
+        const cur = stack.pop();
+        if (cur && typeof cur === 'object') {
+          for (const k in cur) stack.push(cur[k]);
+        } else if (typeof cur === 'string') {
+          if (/^https?:\/\//i.test(cur)) out.add(cur);
+        }
+      }
+      return Array.from(out);
+    }
+
+    function classify(url) {
+      if (MEDIA_EXT.video.test(url)) return 'video';
+      if (MEDIA_EXT.audio.test(url)) return 'audio';
+      if (MEDIA_EXT.image.test(url)) return 'image';
+      return 'other';
+    }
+
+    function renderResults(json) {
+      const container = document.getElementById('results');
+      container.innerHTML = '';
+
+      const links = extractLinks(json);
+      if (!links.length) {
+        container.appendChild(el('div', 'bg-white rounded-2xl shadow p-5 text-sm text-gray-600', 'No direct media links found in response. Check Raw JSON below.'));
+        return;
+      }
+
+      links.sort((a, b) => classify(a).localeCompare(classify(b)));
+
+      links.forEach((url) => {
+        const type = classify(url);
+        const card = el('div', 'bg-white rounded-2xl shadow p-5');
+
+        const header = el('div', 'flex items-center justify-between mb-3');
+        header.appendChild(el('span', 'text-sm font-semibold', type.toUpperCase()));
+        const actions = el('div', 'flex gap-2');
+        const openBtn = el('a', 'px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold', 'Open');
+        openBtn.href = url; openBtn.target = '_blank'; openBtn.rel = 'noopener';
+        const copyBtn = el('button', 'px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-semibold', 'Copy');
+        copyBtn.addEventListener('click', async () => {
+          await navigator.clipboard.writeText(url);
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => copyBtn.textContent = 'Copy', 1200);
+        });
+        actions.appendChild(openBtn); actions.appendChild(copyBtn);
+        header.appendChild(actions);
+        card.appendChild(header);
+
+        if (type === 'video') {
+          const v = el('video', 'w-full rounded-xl', '');
+          v.controls = true; v.src = url;
+          card.appendChild(v);
+        } else if (type === 'audio') {
+          const a = el('audio', 'w-full', '');
+          a.controls = true; a.src = url;
+          card.appendChild(a);
+        } else if (type === 'image') {
+          const i = el('img', 'w-full rounded-xl', '');
+          i.src = url; i.loading = 'lazy';
+          card.appendChild(i);
+        }
+
+        const linkEl = el('code', 'block mt-3 text-xs break-all');
+        linkEl.textContent = url;
+        card.appendChild(linkEl);
+
+        container.appendChild(card);
+      });
+    }
+
+    function renderRaw(json) {
+      const pre = document.getElementById('rawJson');
+      pre.textContent = JSON.stringify(json, null, 2);
+      document.getElementById('rawJsonWrap').open = false;
+    }
+
+    async function fetchMedia(url, platform) {
+      const apiURL = `https://multimedia.tiiny.io?${platform}=${encodeURIComponent(url)}`;
+      setStatus('info', `Fetching from <code>${apiURL}</code> ...`);
+      try {
+        const res = await fetch(apiURL, { headers: { 'accept': 'application/json' } });
+        if (!res.ok) throw new Error(`Upstream status ${res.status}`);
+        const data = await res.json();
+        if (!data || data.error) throw new Error(data?.error || 'Unknown error from upstream');
+        setStatus('success', 'Success! Scroll to see results.');
+        renderRaw(data);
+        renderResults(data);
+      } catch (err) {
+        setStatus('error', err.message || 'Failed to fetch');
+        renderRaw({ error: true, message: err.message || String(err) });
+        document.getElementById('results').innerHTML = '';
+      }
+    }
+
+    // --- Wire up UI ---
+    const urlInput = document.getElementById('url');
+    const btn = document.getElementById('downloadBtn');
+
+    let currentPlatform = null;
+    let debounce;
+
+    function maybeDetect() {
+      const val = urlInput.value.trim();
+      currentPlatform = detectPlatform(val);
+      showPlatformBadge(currentPlatform);
+      btn.disabled = !val || !currentPlatform;
+    }
+
+    urlInput.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(maybeDetect, 150);
+    });
+
+    urlInput.addEventListener('paste', () => {
+      setTimeout(maybeDetect, 10);
+    });
+
+    urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        btn.click();
+      }
+    });
+
+    btn.addEventListener('click', async () => {
+      const raw = urlInput.value.trim();
+      if (!raw) return;
+      const platform = detectPlatform(raw);
+      showPlatformBadge(platform);
+      if (!platform) {
+        setStatus('error', 'Platform not supported or URL invalid');
+        return;
+      }
+      await fetchMedia(raw, platform);
+    });
+
+    // Init
+    maybeDetect();
+  </script></body>
+</html>
