@@ -1,14 +1,11 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Media Downloader</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class'
-    }
-  </script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen flex items-center justify-center transition-colors duration-300">
   <div class="bg-white dark:bg-gray-800 shadow-lg rounded-2xl p-6 w-full max-w-md text-center transition-colors duration-300">
@@ -16,15 +13,18 @@
       <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Media Downloader</h1>
       <button id="toggleTheme" class="px-3 py-1 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">🌙</button>
     </div>
-    <input id="url" type="url" placeholder="Paste your link here..." class="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4 dark:bg-gray-700 dark:text-white" />
-    <button id="downloadBtn" class="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold disabled:opacity-50">Download</button><div id="status" class="mt-4 text-sm text-gray-600 dark:text-gray-300"></div>
-<div id="preview" class="mt-4 hidden">
-  <h2 class="text-lg font-semibold mb-2 text-gray-800 dark:text-white">Preview</h2>
-  <div id="mediaContainer" class="rounded-xl overflow-hidden"></div>
-  <a id="downloadLink" href="#" target="_blank" class="mt-4 inline-block bg-green-600 text-white px-4 py-2 rounded-xl font-semibold">Download Now</a>
-</div>
+    <input id="url" type="url" placeholder="Paste your link here..." class="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4 dark:bg-gray-700 dark:text-white">
+    <button id="downloadBtn" class="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold disabled:opacity-50">Download</button>
 
-  </div>  <script>
+    <div id="status" class="mt-4 text-sm text-gray-600 dark:text-gray-300"></div>
+    <div id="preview" class="mt-4 hidden">
+      <h2 class="text-lg font-semibold mb-2 text-gray-800 dark:text-white">Preview</h2>
+      <div id="mediaContainer" class="rounded-xl overflow-hidden"></div>
+      <a id="downloadLink" href="#" target="_blank" class="mt-4 inline-block bg-green-600 text-white px-4 py-2 rounded-xl font-semibold">Download Now</a>
+    </div>
+  </div>
+
+  <script>
     const PLATFORM_PATTERNS = {
       reel: /instagram\.com\/reel/i,
       igpost: /instagram\.com\/p\//i,
@@ -46,34 +46,20 @@
     }
 
     async function fetchMedia(url, platform) {
-      const apiURL = `https://multimedia.tiiny.io?${platform}=${encodeURIComponent(url)}`;
+      const apiURL = `/api/proxy?platform=${platform}&url=${encodeURIComponent(url)}`;
       document.getElementById('status').textContent = 'Fetching media...';
       try {
         const res = await fetch(apiURL);
         if (!res.ok) throw new Error('Failed to fetch');
         const data = await res.json();
-        const links = extractLinks(data);
-        if (!links.length) throw new Error('No downloadable media found');
-        showPreview(links[0]);
+        const link = data.video_link || data.audio_link;
+        if (!link) throw new Error('No downloadable media found');
+        showPreview(link);
         document.getElementById('status').textContent = '';
       } catch (err) {
         document.getElementById('status').textContent = err.message;
         document.getElementById('preview').classList.add('hidden');
       }
-    }
-
-    function extractLinks(obj) {
-      const out = new Set();
-      const stack = [obj];
-      while (stack.length) {
-        const cur = stack.pop();
-        if (cur && typeof cur === 'object') {
-          for (const k in cur) stack.push(cur[k]);
-        } else if (typeof cur === 'string' && /^https?:\/\//i.test(cur)) {
-          out.add(cur);
-        }
-      }
-      return Array.from(out);
     }
 
     function showPreview(url) {
@@ -130,5 +116,6 @@
       document.body.classList.toggle('dark');
       document.getElementById('toggleTheme').textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
     });
-  </script></body>
+  </script>
+</body>
 </html>
